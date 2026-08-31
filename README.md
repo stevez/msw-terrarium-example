@@ -1,201 +1,124 @@
 # msw-terrarium-example
 
-A Todo app demonstrating three-tier testing with 100% merged coverage using [nextcov](https://github.com/stevez/nextcov), and parallel-safe SSR integration testing using [msw-terrarium](https://github.com/stevez/msw-terrarium).
+A Todo app (Next.js + TypeScript) demonstrating parallel-safe Playwright integration testing with [msw-terrarium](https://github.com/stevez/msw-terrarium) — a bucket-isolated stateful mock server. Each Playwright worker gets its own in-memory "world", so `fullyParallel` integration tests run with real concurrency instead of being forced serial.
 
-## Overview
-
-This is a todo-app using React, Next.js and TypeScript. The idea is mostly from this [article](https://medium.com/@amayawickramasinghe2001/creating-a-to-do-app-with-next-js-cdb58f0b12d1), and the code is referenced from [here](https://github.com/Amaya-2001/ToDoApp). It started as a fork of [nextcov-example](https://github.com/stevez/nextcov-example).
-
-**Key Highlights:**
-- Three-tier testing: Unit + Component + Integration (100% merged coverage)
-- V8 code coverage collection using [nextcov](https://github.com/stevez/nextcov)
-- Coverage merging with statement normalization
-- [msw-terrarium](https://github.com/stevez/msw-terrarium) as a bucket-isolated stateful mock server for SSR tests — each Playwright worker gets its own in-memory world
-- GitHub Actions CI pipeline
-
-**Parallel SSR testing:** the original version of this app used a single `json-server` instance shared by every Playwright worker, so integration tests could only run serially (see the [nextcov-example README](https://github.com/stevez/nextcov-example) for the original constraint). Swapping the mock layer for msw-terrarium gives each worker its own isolated bucket, so `fullyParallel` integration tests — with real `workers > 1` on CI — now work correctly. See [`e2e/mocks/`](e2e/mocks) for the mock server and the [msw-terrarium blog post](https://github.com/stevez/msw-terrarium/blob/main/blog/parallel-isolated-mocks-with-msw-terrarium.md) for the full writeup.
+This is a fork of [nextcov-example](https://github.com/stevez/nextcov-example) with its shared `json-server` mock layer swapped out. Everything about the app itself — the three-tier testing strategy, V8 coverage collection/merging, unit and component tests — is unchanged and documented there; this README only covers the mocking layer. See the [msw-terrarium blog post](https://github.com/stevez/msw-terrarium/blob/main/blog/parallel-isolated-mocks-with-msw-terrarium.md) for the full writeup of the port.
 
 ## Quick Start
 
 ```bash
-# Install dependencies
 npm install
 
-# Start mock server (in one terminal)
+# Start mock server (one terminal)
 npm run mock
 
-# Start development server (in another terminal)
+# Start dev server (another terminal)
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-## Testing
-
-This project uses a **three-tier testing strategy** with **[Vitest](https://vitest.dev/)** for unit and component tests and **[Playwright](https://playwright.dev/)** for integration tests, with coverage collection and merging powered by **[nextcov](https://github.com/stevez/nextcov)**.
-
-### Test Types
-
-| Test Type | Environment | Best For | Coverage Focus |
-|-----------|-------------|----------|----------------|
-| **Unit** | jsdom | Utilities, hooks, logic | Business logic, validation |
-| **Component** | Real browser (Playwright) | UI components, interactions | React components, browser APIs |
-| **Integration** | Full Next.js server | User flows, pages | Server components, SSR |
-
-### Unit Tests (Vitest + jsdom)
-
-Fast unit tests running in jsdom environment for utilities and hooks.
+Run the integration tests:
 
 ```bash
-# Run unit tests with coverage
-npm run test:unit
-
-# Run tests in watch mode
-npm run test:watch
-
-# Run with Vitest UI dashboard
-npm run test:unit:ui
-```
-
-Coverage output: `./coverage/unit`
-
-View report: `npm run lcov:unit`
-
-### Component Tests (Vitest + Playwright Browser)
-
-Real browser tests using Vitest browser mode with Playwright. Components render in an actual browser with real DOM APIs, CSS, and user interactions.
-
-```bash
-# Run component tests (headless)
-npm run test:component
-
-# Run with visible browser for debugging
-npm run test:component:headed
-```
-
-Coverage output: `./coverage/component`
-
-View report: `npm run lcov:component`
-
-### Integration Tests (Playwright)
-
-Full end-to-end tests using Playwright that test the complete application including React Server Components and SSR.
-
-```bash
-# Run integration tests (local)
-# 1. Build for local testing
 npm run build:local
-
-# 2. Start mock server and Next.js server
-npm run start:integration
-
-# 3. Run Playwright tests (in another terminal)
-npm run playwright-test
-
-# Or run all-in-one (CI mode)
 npm run integration-test
 ```
 
-Coverage output: `./coverage/integration`
+## Writing Playwright tests with msw-terrarium
 
-View report: `npm run lcov:integration`
+### 1. Declare the mock schema
 
-### Coverage
+[`e2e/mocks/schema.js`](e2e/mocks/schema.js) declares the `task` collection with `defineSchema`. No `baseline` is set, so every fresh bucket starts genuinely empty:
 
-This project uses **[nextcov](https://www.npmjs.com/package/nextcov)** to collect V8 coverage from all three test types and merge them into a unified report.
+```js
+import { z } from 'zod';
+import { defineSchema } from 'msw-terrarium';
 
-```bash
-# Run all tests (unit + component)
-npm test
-
-# Run integration tests (see steps above)
-
-# Merge all coverage sources into a single report
-npm run coverage:merge
+export const { createDb, seedBaseline } = defineSchema({
+  task: {
+    schema: z.object({ id: z.string(), text: z.string() }),
+    idPrefix: 'task',
+  },
+});
 ```
 
-**Coverage Output:**
-- Unit test coverage: `coverage/unit/`
-- Component test coverage: `coverage/component/`
-- Integration test coverage: `coverage/integration/`
-- Merged coverage: `coverage/merged/` (HTML report at `coverage/merged/index.html`)
+### 2. Declare the REST handlers
 
-View merged report: `npm run lcov:merged`
+[`e2e/mocks/handlers.js`](e2e/mocks/handlers.js) maps the app's four `/tasks` endpoints onto the bucket's collection with `createRestHandlers`:
 
-**Coverage by Test Type:**
+```js
+import { createRestHandlers } from 'msw-terrarium';
 
-| Test Type | Overall % | What It Covers |
-|-----------|-----------|----------------|
-| **Unit Tests** | ~36% | Utilities, hooks |
-| **Component Tests** | ~52% | UI components (TodoList, TodoItem) |
-| **Integration Tests** | ~88% | Pages, server components, SSR |
-| **Merged** | **100%** | Complete picture of your application |
+export function createHandlers({ store }) {
+  return createRestHandlers({
+    store,
+    routes: {
+      'GET /tasks': ({ world }) => ({
+        body: world.db.task.findMany((q) => q.where({})),
+      }),
+      'POST /tasks': async ({ world, body }) => {
+        const task = await world.db.task.createNext(body);
+        return { status: 201, body: task };
+      },
+      // PUT /tasks/:id, DELETE /tasks/:id — see the file for the rest
+    },
+  });
+}
+```
 
-**Why Three Test Types?**
+### 3. Wire the mock server
 
-Each test type excels at different aspects:
+[`e2e/mocks/index.js`](e2e/mocks/index.js) composes the bucket store, seed loader, and handlers into an app; [`e2e/mocks/server.mjs`](e2e/mocks/server.mjs) boots it on port 3001 via `startMockServer`. `bucketHeader: 'x-mock-bucket'` is the header the mock server reads on every request to resolve which worker's world to use.
 
-1. **Unit tests** - Fast, isolated tests for business logic that doesn't need a browser
-2. **Component tests** - Real browser rendering for components that use browser APIs (localStorage, CSS, events)
-3. **Integration tests** - Full integration testing including React Server Components which can't be unit tested
+### 4. Extend the Playwright fixture
 
-### Coverage Normalization
+[`e2e/fixtures.ts`](e2e/fixtures.ts) uses `extendWithGiven` from `msw-terrarium/playwright`, which adds a worker-scoped `bucketId`, a `page` fixture that auto-attaches the bucket header, and a `given` fixture for driving mock state:
 
-Before merging, the `coverage:strip` script removes import statements and Next.js directives from unit/component coverage. This normalizes statement counts between environments:
+```ts
+import { test as base } from "@playwright/test";
+import { extendWithGiven } from "msw-terrarium/playwright";
 
-- **jsdom** doesn't count imports as statements
-- **Real browser** counts imports as executable statements
-- **Next.js bundled** has different statement structure
+export const { test, expect } = extendWithGiven(base, {
+  mockUrl: "http://localhost:3001",
+  bucketHeader: "x-mock-bucket",
+});
+```
 
-The strip script ensures apples-to-apples comparison when merging.
+(The real file in this repo also layers in the app's `nextcov` coverage fixture on top — see the file for that composition.)
 
-## Available Scripts
+### 5. Write the spec
 
-### Development
-- `npm run dev` - Start Next.js development server
-- `npm run build` - Build for production
-- `npm run start` - Start production server
-- `npm run mock` - Start the msw-terrarium mock server
+[`e2e/todo-app.spec.ts`](e2e/todo-app.spec.ts):
 
-### Testing
-- `npm test` - Run unit + component tests with coverage
-- `npm run test:unit` - Run unit tests only (jsdom)
-- `npm run test:unit:ui` - Run unit tests with Vitest UI dashboard
-- `npm run test:watch` - Run unit tests in watch mode
-- `npm run test:component` - Run component tests (browser)
-- `npm run test:component:headed` - Run component tests with visible browser
+```ts
+import { test, expect } from "./fixtures";
 
-### Integration Testing
-- `npm run build:local` - Build with E2E mode enabled
-- `npm run start:integration` - Start Next.js + mock server
-- `npm run playwright-test` - Run Playwright tests
-- `npm run integration-test` - All-in-one integration test (CI)
+test.describe("ToDo App", () => {
+  // Load the app's four canned tasks into this test's bucket before each test.
+  test.beforeEach(async ({ given }) => {
+    await given.load("default-tasks");
+  });
 
-### Coverage
-- `npm run coverage:strip` - Normalize coverage data
-- `npm run coverage:merge` - Merge all coverage sources
-- `npm run lcov:unit` - Open unit coverage report
-- `npm run lcov:component` - Open component coverage report
-- `npm run lcov:integration` - Open integration coverage report
-- `npm run lcov:merged` - Open merged coverage report
+  test("list when empty tasks", async ({ page, given }) => {
+    // Override back to an empty bucket for this one test.
+    await given.fresh();
 
-## Test Stack
+    await page.goto("/");
+    await expect(page.getByText("No task")).toBeVisible();
+  });
 
-- **Vitest**: Test runner for unit and browser tests
-- **@vitest/browser**: Browser testing with Playwright provider
-- **Playwright**: Integration testing and browser automation
-- **nextcov**: V8 coverage collection for Next.js with Playwright
-- **@vitest/coverage-v8**: V8 coverage for Vitest tests
-- **msw-terrarium**: Bucket-isolated, stateful mock server for parallel-safe SSR testing
+  test("edit task", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("cell", { name: "✕ Edit Task HackerRank" }).getByRole("img").first().click();
+    // ...
+  });
+});
+```
 
-## CI/CD
+`given.load('default-tasks')` loads the seed at [`e2e/mocks/seeds/default-tasks.json`](e2e/mocks/seeds/default-tasks.json) — the four tasks the app used to ship as its `json-server` database — into just this test's bucket. `given.fresh()` resets the bucket back to its empty default. Because every bucket is isolated per worker, these calls never affect any other test running concurrently.
 
-The GitHub Actions workflow runs all tests and merges coverage:
+## Learn more
 
-1. Run unit tests (`npm run test:unit`)
-2. Run component tests (`npm run test:component`)
-3. Build for integration testing (`npm run build:local`)
-4. Run integration tests (`npm run integration-test`)
-5. Merge all coverage (`npm run coverage:merge`)
-
-See [.github/workflows/ci.yml](.github/workflows/ci.yml) for details.
+- [msw-terrarium](https://github.com/stevez/msw-terrarium) — the library itself, with the full README/API reference.
+- [nextcov-example](https://github.com/stevez/nextcov-example) — the original app, with the three-tier testing and coverage-merging setup this repo inherits unchanged.
