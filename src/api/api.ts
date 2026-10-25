@@ -3,7 +3,8 @@
 import { ITask } from "@/types/tasks";
 import { headers } from 'next/headers';
 
-const baseUrl = "http://localhost:3001";
+// The desktop app (web-terrarium) sets MOCK_API_URL to its mock server's free port.
+const baseUrl = process.env.MOCK_API_URL ?? "http://localhost:3001";
 
 const getBucketId = async () => {
   const headersList = await headers();

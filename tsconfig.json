@@ -40,9 +40,10 @@
     "**/*.ts",
     "**/*.tsx",
     ".next/types/**/*.ts",
+    "dist/types/**/*.ts",
     "next-env.d.ts",
     "next.config.js",
-    "dist/types/**/*.ts"
+    ".next-terrarium/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",

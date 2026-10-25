@@ -53,3 +53,7 @@ playwright-results/
 .yalc/
 yalc.lock
 .v8-coverage/
+
+# desktop app (web-terrarium)
+/.next-terrarium/
+/dist-desktop/
