@@ -118,7 +118,19 @@ test.describe("ToDo App", () => {
 
 `given.load('default-tasks')` loads the seed at [`e2e/mocks/seeds/default-tasks.json`](e2e/mocks/seeds/default-tasks.json) — the four tasks the app used to ship as its `json-server` database — into just this test's bucket. `given.fresh()` resets the bucket back to its empty default. Because every bucket is isolated per worker, these calls never affect any other test running concurrently.
 
+## Desktop app
+
+The same app, with its msw-terrarium mock server, can be packaged as a Windows or Mac desktop app with [web-terrarium](https://github.com/stevez/web-terrarium). The config is [`terrarium.config.mjs`](terrarium.config.mjs).
+
+```bash
+npx web-terrarium build   # zip in dist-desktop/out
+npx web-terrarium start   # or open the staged app without packaging
+```
+
+In the desktop app, the mock server and the Next server start on free ports on `127.0.0.1`. `MOCK_PORT` and `MOCK_HOST` tell the mock where to listen, and `MOCK_API_URL` tells the app where it is. Without them, tests and dev use `http://localhost:3001` as before. The mock starts empty, as in tests, so add a task to see it work.
+
 ## Learn more
 
 - [msw-terrarium](https://github.com/stevez/msw-terrarium) — the library itself, with the full README/API reference.
+- [web-terrarium](https://github.com/stevez/web-terrarium) — packages this app and its mock as a desktop app.
 - [nextcov-example](https://github.com/stevez/nextcov-example) — the original app, with the three-tier testing and coverage-merging setup this repo inherits unchanged.
