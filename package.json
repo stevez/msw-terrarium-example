@@ -69,7 +69,7 @@
     "vite-tsconfig-paths": "^5.1.4",
     "vitest": "^4.0.16",
     "vitest-browser-react": "^2.0.2",
-    "web-terrarium": "^0.1.0",
+    "web-terrarium": "^0.2.0",
     "zod": "^4.4.3"
   },
   "browserslist": [
